@@ -1,0 +1,62 @@
+version: "3.9"
+services:
+  analytics:
+    container_name: analytics
+    image: spark:3.5.0
+    volumes:
+      - ./click_analytics:/opt/click_analytics
+    working_dir: /opt/spark/bin
+    command: ./spark-submit --conf spark.driver.extraJavaOptions="-Divy.cache.dir=/tmp -Divy.home=/tmp" --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 /opt/click_analytics/click_analysis.py
+
+  analytics_backend:
+    container_name: analytics_backend
+    image: python:3.11-bookworm
+    volumes:
+      - ./backend:/opt/backend
+    tty: true
+    working_dir: /opt/backend
+    command: bash -c "pip install pdm && pdm install && pdm start"
+
+  application:
+    container_name: application
+    image: node:16-alpine
+    ports:
+      - 8001:3000
+    volumes:
+      - ./app:/opt/app
+    # command: TBA
+
+  kafka:
+    container_name: kafka
+    image: docker.io/bitnami/kafka:3.5
+    ports:
+      - "9092:9092"
+    volumes:
+      - "kafka_data:/bitnami"
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # Listeners
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+  db:
+    container_name: db
+    image: postgres:15-alpine
+    volumes:
+      - ./pg_data:/var/lib/postgresql/data/pgdata
+    ports:
+      - 5432:5432
+    env_file: ./secrets/db-password.txt
+
+volumes:
+  click_analytics: {}
+  kafka_data:
+    driver: local

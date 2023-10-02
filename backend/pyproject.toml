@@ -1,0 +1,20 @@
+[project]
+name = "backend"
+version = "0.0.1"
+description = ""
+authors = [{ name = "Hai Binh Do", email = "binhdoitsme@gmail.com" }]
+dependencies = [
+    "uvicorn>=0.23.2",
+    "fastapi>=0.103.1",
+    "redis>=5.0.1",
+    "kafka-python>=2.0.2",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+[tool.pdm.scripts]
+start = { call = "src.main:main", env_file = ".env" }
+
+[tool.pdm.dev-dependencies]
+dev = ["types-confluent-kafka>=1.0.0"]
