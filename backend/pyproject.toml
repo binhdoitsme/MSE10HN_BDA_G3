@@ -6,15 +6,15 @@ authors = [{ name = "Hai Binh Do", email = "binhdoitsme@gmail.com" }]
 dependencies = [
     "uvicorn>=0.23.2",
     "fastapi>=0.103.1",
-    "redis>=5.0.1",
-    "kafka-python>=2.0.2",
+    "websockets>=11.0.3",
+    "aiokafka>=0.8.1",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 
 [tool.pdm.scripts]
-start = { call = "src.main:main", env_file = ".env" }
+start = { cmd = "uvicorn main:app --host=0.0.0.0", env_file = ".env" }
 
 [tool.pdm.dev-dependencies]
 dev = ["types-confluent-kafka>=1.0.0"]
