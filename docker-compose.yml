@@ -6,13 +6,17 @@ services:
     volumes:
       - ./click_analytics:/opt/click_analytics
     working_dir: /opt/spark/bin
-    command: ./spark-submit --conf spark.driver.extraJavaOptions="-Divy.cache.dir=/tmp -Divy.home=/tmp" --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 /opt/click_analytics/click_analysis.py
+    env_file:
+      - ./secrets/spark-env.txt
+    command: ./spark-submit --conf spark.driver.extraJavaOptions="-Divy.cache.dir=/tmp -Divy.home=/tmp" --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0 /opt/click_analytics/click_analysis.py
 
   analytics_backend:
     container_name: analytics_backend
     image: python:3.11-bookworm
     volumes:
       - ./backend:/opt/backend
+    ports:
+      - 8002:8000
     tty: true
     working_dir: /opt/backend
     command: bash -c "pip install pdm && pdm install && pdm start"
