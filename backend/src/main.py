@@ -92,7 +92,7 @@ class ConnectionManager:
         try:
             async for msg in self.consumer:
                 print(msg)
-                await self.broadcast(json.loads(str(msg.value)))
+                await self.broadcast(json.loads(msg.value))
         finally:
             await self.consumer.stop()
 
