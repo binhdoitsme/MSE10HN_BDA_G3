@@ -12,23 +12,40 @@ services:
 
   analytics_backend:
     container_name: analytics_backend
-    image: python:3.11-bookworm
+    image: python:3.11-alpine
     volumes:
       - ./backend:/opt/backend
     ports:
       - 8002:8000
     tty: true
     working_dir: /opt/backend
-    command: bash -c "pip install pdm && pdm install && pdm start"
+    command: sh -c "pip install pdm && pdm install && pdm start"
 
-  application:
-    container_name: application
+  app_backend:
+    container_name: app_backend
     image: node:16-alpine
     ports:
-      - 8001:3000
+      - 8100:3000
     volumes:
-      - ./app:/opt/app
-    # command: TBA
+      - ./app/backend:/opt/app
+    working_dir: /opt/app
+    entrypoint: /bin/sh
+    command: ["-c", "npm install && npm start"]
+
+  app_frontend:
+    container_name: app_frontend
+    image: node:16-alpine
+    ports:
+      - 8101:3000
+    volumes:
+      - ./app/frontend:/opt/app
+    working_dir: /opt/app
+    entrypoint: /bin/sh
+    command:
+      [
+        "-c",
+        "npm install -g serve && npm install && npm run build && serve -s build -l 3000",
+      ]
 
   kafka:
     container_name: kafka

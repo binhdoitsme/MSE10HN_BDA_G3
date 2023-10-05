@@ -1,6 +1,6 @@
 import os
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import col, from_json, struct, to_json, when
+from pyspark.sql.functions import col, from_json, struct, to_json, when, date_trunc
 from pyspark.sql.types import StringType, StructField, StructType, TimestampType
 
 
@@ -33,13 +33,14 @@ def main():
     df = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", "kafka:9092")
-        .option("subscribe", "stream_analytics")
+        .option("subscribe", "clicks")
+        .option("minOffsetsPerTrigger", 20)
+        .option("maxTriggerDelay", "30s")
         .load()
         .withColumn("json", from_json(col("value").cast("string"), schema))
     )
     df.printSchema()
     df = df.select(
-        col("json.session_id").alias("session_id"),
         col("json.timestamp").alias("timestamp"),
         col("json.product_id").alias("product_id"),
         when(df["json.user_agent"].rlike("iPhone|iPad|iPod|iOS"), "iOS")
@@ -50,16 +51,24 @@ def main():
         .alias("device"),
     )
     df.printSchema()
-
+    s2 = df.writeStream.foreachBatch(save_to_database).start()
+    count = (
+        df.withColumn("timestamp", date_trunc("minute", col("timestamp")))
+        .withWatermark("timestamp", "1 minutes")
+        .groupBy(col("product_id"), col("device"), col("timestamp"))
+        .count()
+    )
+    count.printSchema()
     s1 = (
-        df.select(to_json(struct([df[x] for x in df.columns])).alias("value"))
+        count.select(to_json(struct([count[x] for x in count.columns])).alias("value"))
         .writeStream.format("kafka")
         .option("kafka.bootstrap.servers", "kafka:9092")
         .option("topic", "live_report")
         .option("checkpointLocation", "/tmp/spark/checkpoint")
+        .outputMode("update")
         .start()
     )
-    s2 = df.writeStream.foreachBatch(save_to_database).start()
+
     # print(s1)
     # print(s2)
     spark.streams.awaitAnyTermination()

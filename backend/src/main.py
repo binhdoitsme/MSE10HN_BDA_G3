@@ -3,30 +3,37 @@ import json
 import os
 import re
 from datetime import datetime
-from threading import Thread
-from typing import Any
-from fastapi.responses import StreamingResponse
+from typing import Annotated, Any
 
 import pydantic
-import uvicorn
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, Header, Response, WebSocket, WebSocketDisconnect, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic.alias_generators import to_camel
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 loop = asyncio.get_event_loop()
 producer = AIOKafkaProducer(loop=loop, bootstrap_servers=os.getenv("KAFKA_BROKER", ""))
-stream_analytics_topic = "stream_analytics"
+streaming_topic = "clicks"
 live_report_topic = "live_report"
 
 
 class ClickTrackingResult(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(alias_generator=to_camel)
-    session_id: str
-    timestamp: datetime
     product_id: str
-    user_agent: str
+    timestamp: datetime = datetime.utcnow()
+    user_agent: str = ""
 
     @property
     def device(self):
@@ -57,12 +64,12 @@ class ClickTrackingResult(pydantic.BaseModel):
         return "Other"
 
 
-@app.post("/")
-async def register_click(request: ClickTrackingResult):
-    value = request.model_dump_json()
-    await producer.send(topic=stream_analytics_topic, value=value.encode())
-    # await producer.send(topic=live_report_topic, value=value.encode())
-    print("......")
+@app.post("/clicks")
+async def register_click(
+    request: ClickTrackingResult, user_agent: Annotated[str | None, Header()] = None
+):
+    value = request.model_copy(update=dict(user_agent=user_agent)).model_dump_json()
+    await producer.send(topic=streaming_topic, value=value.encode())
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -92,7 +99,7 @@ class ConnectionManager:
         try:
             async for msg in self.consumer:
                 print(msg)
-                await self.broadcast(json.loads(msg.value))
+                await self.broadcast(json.loads(msg.value))  # type: ignore
         finally:
             await self.consumer.stop()
 
@@ -126,6 +133,7 @@ async def streaming_example():
         for i in range(100):
             yield f"reload time {i}\n"
             await asyncio.sleep(1)
+
     return StreamingResponse(generator(), media_type="text/event-stream")
 
 
@@ -136,7 +144,7 @@ async def startup_event():
 
 
 # def main():
-    # producer.send(topic=stream_analytics_topic, value=b"Hello Kafka!")
-    # producer.flush()
+# producer.send(topic=stream_analytics_topic, value=b"Hello Kafka!")
+# producer.flush()
 
-    # uvicorn.run(app, host="0.0.0.0")
+# uvicorn.run(app, host="0.0.0.0")
