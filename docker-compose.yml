@@ -1,52 +1,5 @@
 version: "3.9"
 services:
-  analytics:
-    container_name: analytics
-    image: spark:3.5.0
-    volumes:
-      - ./click_analytics:/opt/click_analytics
-    working_dir: /opt/spark/bin
-    env_file:
-      - ./secrets/spark-env.txt
-    command: ./spark-submit --conf spark.driver.extraJavaOptions="-Divy.cache.dir=/tmp -Divy.home=/tmp" --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0 /opt/click_analytics/click_analysis.py
-
-  analytics_backend:
-    container_name: analytics_backend
-    image: python:3.11-alpine
-    volumes:
-      - ./backend:/opt/backend
-    ports:
-      - 8002:8000
-    tty: true
-    working_dir: /opt/backend
-    command: sh -c "pip install pdm && pdm install && pdm start"
-
-  app_backend:
-    container_name: app_backend
-    image: node:16-alpine
-    ports:
-      - 8100:3000
-    volumes:
-      - ./app/backend:/opt/app
-    working_dir: /opt/app
-    entrypoint: /bin/sh
-    command: ["-c", "npm install && npm start"]
-
-  app_frontend:
-    container_name: app_frontend
-    image: node:16-alpine
-    ports:
-      - 8101:3000
-    volumes:
-      - ./app/frontend:/opt/app
-    working_dir: /opt/app
-    entrypoint: /bin/sh
-    command:
-      [
-        "-c",
-        "npm install -g serve && npm install && npm run build && serve -s build -l 3000",
-      ]
-
   kafka:
     container_name: kafka
     image: docker.io/bitnami/kafka:3.5
@@ -76,6 +29,79 @@ services:
     ports:
       - 5432:5432
     env_file: ./secrets/db-password.txt
+
+  analytics:
+    container_name: analytics
+    image: spark:3.5.0
+    volumes:
+      - ./click_analytics:/opt/click_analytics
+    working_dir: /opt/spark/bin
+    env_file:
+      - ./secrets/spark-env.txt
+    command: ./spark-submit --conf spark.driver.extraJavaOptions="-Divy.cache.dir=/tmp -Divy.home=/tmp" --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0 /opt/click_analytics/click_analysis.py
+    depends_on:
+      - "kafka"
+      - "db"
+
+  analytics_backend:
+    container_name: analytics_backend
+    image: python:3.11-alpine
+    volumes:
+      - ./backend:/opt/backend
+    ports:
+      - 8002:8000
+    tty: true
+    working_dir: /opt/backend
+    command: sh -c "pip install pdm && pdm install && pdm start"
+    depends_on:
+      - "kafka"
+      - "db"
+
+  app_backend:
+    container_name: app_backend
+    image: node:16-alpine
+    ports:
+      - 8100:3000
+    volumes:
+      - ./app/backend:/opt/app
+    working_dir: /opt/app
+    entrypoint: /bin/sh
+    command: ["-c", "npm install && npm start"]
+    depends_on:
+      - "db"
+
+  app_frontend:
+    container_name: app_frontend
+    image: node:16-alpine
+    ports:
+      - 8101:3000
+    volumes:
+      - ./app/frontend:/opt/app
+    working_dir: /opt/app
+    entrypoint: /bin/sh
+    command:
+      [
+        "-c",
+        # "npm install -g serve && npm install && npm run build && serve -s build -l 3000",
+        "npm install && npm start" # dev mode
+      ]
+    depends_on:
+      - "db"
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: ./Dockerfile
+    image: local.nginx
+    container_name: nginx
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+    ports:
+      - 8000:80
+    depends_on:
+      - "app_backend"
+      - "app_frontend"
+      - "analytics_backend"
 
 volumes:
   click_analytics: {}
