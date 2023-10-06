@@ -35,7 +35,7 @@ def main():
         .option("kafka.bootstrap.servers", "kafka:9092")
         .option("subscribe", "clicks")
         .option("minOffsetsPerTrigger", 20)
-        .option("maxTriggerDelay", "30s")
+        .option("maxTriggerDelay", "15s")
         .load()
         .withColumn("json", from_json(col("value").cast("string"), schema))
     )
@@ -57,6 +57,12 @@ def main():
         .withWatermark("timestamp", "1 minutes")
         .groupBy(col("product_id"), col("device"), col("timestamp"))
         .count()
+        .select(
+            col("product_id").alias("productId"),
+            col("device"),
+            col("timestamp").alias("time"),
+            col("count").alias("clicks"),
+        )
     )
     count.printSchema()
     s1 = (

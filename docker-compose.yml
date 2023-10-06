@@ -82,8 +82,8 @@ services:
     command:
       [
         "-c",
-        # "npm install -g serve && npm install && npm run build && serve -s build -l 3000",
-        "npm install && npm start" # dev mode
+        "npm install -g serve && npm install && npm run build && serve -s build -l 3000",
+        # "npm install && npm start" # dev mode
       ]
     depends_on:
       - "db"
